@@ -6,7 +6,7 @@
 
 도메인 로직은 `src/cart.py`의 Entity 계층에 위치합니다. 테스트와 구현은 **계약 ID**(INV-*, E-*)를 기준으로 작성·추적합니다. 계약 ID는 테스트와 구현을 잇는 "추적의 못"이며, 사람 개발자와 AI 코딩 에이전트가 함께 참고하는 프로젝트 지도입니다.
 
-**현재 단계: RED 준비** — 계약이 문서화되었으며, 아직 실패 테스트 작성·구현 완료 단계는 아닙니다.
+**현재 단계: RED** — INV-1, E-1, E-2 실패 테스트 작성 중. 상세 체크리스트는 아래 [INV-1, E-1, E-2 작업 체크리스트](#inv-1-e-1-e-2-작업-체크리스트)를 참고하세요.
 
 상세 요구사항은 [docs/PRD.md](docs/PRD.md)를 참고하세요.
 
@@ -51,18 +51,102 @@
 .
 ├── README.md
 ├── src/
-│   └── cart.py
+│   └── cart.py          # Entity — subtotal(), calculate()
 └── tests/
-    └── test_cart.py
+    ├── entity/
+    │   └── test_cart.py # INV-* 불변식
+    └── boundary/
+        └── test_app.py  # E-* 입력 검증
 ```
 
-## TDD 진행 순서
+## INV-1, E-1, E-2 작업 체크리스트
 
-1. **RED** — 계약 ID별 실패 테스트를 `tests/test_cart.py`에 작성합니다. 테스트 이름·주석에 계약 ID를 명시합니다.
+근거: [docs/TEST-PLAN-INV-1-E-1-E-2.md](docs/TEST-PLAN-INV-1-E-1-E-2.md) §1 범위. 본 체크리스트는 아래 세 계약만 다룹니다.
+
+| ID | 계약 | 근거 레벨 | 계층 |
+|----|------|-----------|------|
+| **INV-1** | `subtotal(items) == Σ(price × qty)` | — | Entity |
+| **E-1** | `items is None` → `TypeError` | L0 | Boundary\* |
+| **E-2** | `price` 또는 `qty`가 음수 → `ValueError`, 오류 메시지에 **인덱스** 포함 | L0 | Boundary\* |
+
+\* E-1, E-2는 Boundary 계약이지만, 현재 실습에서는 `src/cart.py`의 `subtotal()` 진입점에서 검증합니다.
+
+권장 사이클 순서: **INV-1 → E-2 → E-1**. 각 계약마다 RED → GREEN → REFACTOR를 완료한 뒤 다음 계약으로 넘어갑니다.
+
+### RED 단계 (`tests/`만 수정, `src/` 금지)
+
+공통
+
+- [ ] 테스트 함수명·docstring에 계약 ID(INV-1, E-1, E-2) 명시
+- [ ] `pytest.skip`, `assert True` 등 우회 없이 실패하는 assert·예외 검증 작성
+- [ ] `pytest -q` 실행 — 의도된 실패(또는 import 오류) 확인
+
+**1. INV-1** — `tests/entity/test_cart.py`
+
+- [ ] `from src.cart import subtotal` import
+- [ ] `test_inv_1_…` — 단일 품목: `[(12000, 3)]` → `36000` (T1, 가장 먼저 작성)
+- [ ] `test_inv_1_…` — 인터뷰 대표 사례: `[(12000, 3), (30000, 1)]` → `66000` (T2)
+- [ ] `test_inv_1_…` — 복수 품목: `[(10000, 2), (5000, 4), (3000, 1)]` → `43000` (T3)
+- [ ] `test_inv_1_…` — 수량 1: `[(48000, 1)]` → `48000` (T4)
+- [ ] 할인·VIP 인자 사용하지 않음 (`subtotal`만 호출)
+
+**2. E-2** — `tests/boundary/test_app.py` (INV-1 RED 이후)
+
+- [ ] `test_e_2_…` — 음수 수량, 인덱스 0: `[(12000, -1)]` → `ValueError`, 메시지에 `"0"` (T5, E-2 첫 RED)
+- [ ] `test_e_2_…` — 음수 단가, 인덱스 0: `[(-100, 1)]` → `ValueError`, 메시지에 `"0"` (T6)
+- [ ] `test_e_2_…` — 두 번째 품목 음수 수량, 인덱스 1: `[(12000, 3), (30000, -1)]` (T7)
+- [ ] `test_e_2_…` — 두 번째 품목 음수 단가, 인덱스 1: `[(12000, 3), (-500, 1)]` (T8)
+- [ ] `pytest.raises(ValueError)` + `assert "<인덱스>" in str(exc_info.value)`
+- [ ] 0원 반환으로 우회하는 테스트 없음 (OOS-7)
+
+**3. E-1** — `tests/boundary/test_app.py` (E-2 GREEN 이후)
+
+- [ ] `test_e_1_…` — `subtotal(None)` → `TypeError` (T9)
+- [ ] `test_e_1_…` — `calculate(None, vip=True)` → `TypeError` (T10, `calculate` export 시)
+- [ ] `pytest.raises(TypeError)` — `ValueError` 아님
+
+### GREEN 단계 (`src/cart.py` 최소 구현)
+
+공통
+
+- [ ] RED에서 작성한 테스트만 통과시키는 최소 코드만 추가
+- [ ] 구현 줄에 충족한 계약 ID 주석 (`# INV-1`, `# E-2`, `# E-1`)
+- [ ] 할인·VIP·범위 밖 예외 처리 미리 넣지 않음
+- [ ] `pytest -q` 전체 통과 확인
+
+**1. INV-1**
+
+- [ ] `src/cart.py`에 `subtotal(items)` 정의
+- [ ] 품목 리스트를 순회하며 `price × qty` 누적 합산
+- [ ] T1 ~ T4 테스트 통과
+
+**2. E-2**
+
+- [ ] 품목 순회 시 `price < 0` 또는 `qty < 0`이면 `ValueError` 발생
+- [ ] 예외 메시지에 해당 품목 인덱스(0, 1, …) 포함
+- [ ] T5 ~ T8 테스트 통과
+
+**3. E-1**
+
+- [ ] `subtotal()` (및 `calculate()` export 시) 최상단에서 `items is None` 검사
+- [ ] `None` 입력 시 `TypeError` 발생
+- [ ] T9 ~ T10 테스트 통과
+
+### 완료 기준
+
+- [ ] INV-1, E-2, E-1 관련 테스트 전부 통과
+- [ ] `pytest tests/entity -q` 통과
+- [ ] `pytest tests/boundary -q` 통과
+- [ ] `pytest -q` 통과
+- [ ] 구현에 `# INV-1`, `# E-2`, `# E-1` 주석 존재
+
+## TDD 진행 순서 (전체 프로젝트)
+
+1. **RED** — 계약 ID별 실패 테스트를 `tests/entity/`, `tests/boundary/`에 작성합니다. 테스트 이름·docstring에 계약 ID를 명시합니다.
 2. **GREEN** — 해당 ID를 만족하는 최소 구현을 `src/cart.py`에 추가합니다. 구현 줄에 충족한 계약 ID를 주석으로 단습니다.
 3. **REFACTOR** — 모든 테스트가 통과한 상태에서만 구조를 개선합니다. 리팩터 전후로 `pytest -q`로 동작 불변을 확인합니다.
 
-권장 RED 진입 순서: INV-1 → INV-2(미달) → INV-2(문턱) → E-2 → INV-3 → INV-4 → E-1
+권장 RED 진입 순서 (전체): INV-1 → INV-2(미달) → INV-2(문턱) → E-2 → INV-3 → INV-4 → E-1
 
 ## 테스트 실행
 
