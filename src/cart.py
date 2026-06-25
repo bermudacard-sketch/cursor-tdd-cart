@@ -27,3 +27,11 @@ def subtotal(items):
         total += item["price"] * item["qty"]  # INV-1
 
     return total
+
+
+def final_total(items, is_vip=False):
+    total = subtotal(items)
+    total = apply_threshold_discount(total)  # INV-3
+    if is_vip:
+        total = round(total * 0.95)  # INV-3
+    return total  # INV-4
