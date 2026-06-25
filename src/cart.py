@@ -7,11 +7,12 @@ def _validate_line_items(items):
 
 
 THRESHOLD = 50000
+THRESHOLD_RATE = 0.9
 
 
 def apply_threshold_discount(amount):
     if amount >= THRESHOLD:  # INV-2
-        return round(amount * 0.9)  # INV-2
+        return round(amount * THRESHOLD_RATE)  # INV-2
     return amount  # INV-2
 
 
